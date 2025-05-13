@@ -1,0 +1,154 @@
+import React, { useEffect, useState } from "react";
+import axios from "axios";
+
+// Task Interface
+interface Task {
+  id: number;
+  title: string;
+  description: string;
+  due_date: string;
+  completed: boolean;
+}
+
+const CalendarGrid = () => {
+  const [tasks, setTasks] = useState<Task[]>([]);
+  const [month, setMonth] = useState(5); // May
+  const [year, setYear] = useState(2025);
+  const [selectedDay, setSelectedDay] = useState<number | null>(null);
+  const [selectedTime, setSelectedTime] = useState<string | null>(null);
+  const [showForm, setShowForm] = useState(false);
+  const [taskForm, setTaskForm] = useState({ title: "", description: "" });
+
+  // Fetch tasks from the API
+  useEffect(() => {
+    axios
+      .get(`http://localhost:8080/tasks`)
+      .then((response) => setTasks(response.data))
+      .catch((error) => console.error(error));
+  }, []);
+
+  // Handle month navigation
+  const handleMonthChange = (increment: number) => {
+    let newMonth = month + increment;
+    if (newMonth < 1) {
+      newMonth = 12;
+      setYear(year - 1);
+    } else if (newMonth > 12) {
+      newMonth = 1;
+      setYear(year + 1);
+    }
+    setMonth(newMonth);
+  };
+
+  // Helper function to generate days in a month
+  const generateCalendar = () => {
+    const days: JSX.Element[] = [];
+    const firstDay = new Date(year, month - 1, 1).getDay(); // Get day of the week for the 1st of the month
+    const daysInMonth = new Date(year, month, 0).getDate(); // Get the number of days in the month
+
+    // Add empty cells for the previous month’s overflow days
+    for (let i = 0; i < firstDay; i++) {
+      days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
+    }
+
+    // Create the actual calendar days
+    for (let i = 1; i <= daysInMonth; i++) {
+      days.push(
+        <div
+          key={i}
+          className="calendar-day"
+          onClick={() => setSelectedDay(i)}
+        >
+          <p>{i}</p>
+          {renderTimeSlots(i)}
+        </div>
+      );
+    }
+
+    // Add empty cells to complete the grid if necessary
+    const remainingCells = 35 - days.length; // Fill remaining empty cells in the grid
+    for (let i = 0; i < remainingCells; i++) {
+      days.push(<div key={`empty-${i + days.length}`} className="calendar-day empty"></div>);
+    }
+
+    return days;
+  };
+
+  // Render time slots for a day (6 AM - 12 PM)
+  const renderTimeSlots = (day: number) => {
+    const times = ["6:00 AM", "6:30 AM", "7:00 AM", "7:30 AM", "8:00 AM", "8:30 AM", "9:00 AM", "9:30 AM", "10:00 AM", "10:30 AM", "11:00 AM", "11:30 AM", "12:00 PM", "12:00 PM", "12:30 PM", "1:00 PM", "1:30 PM", "2:00 PM", "2:30 PM", "3:00 PM", "3:30 PM", "4:30 PM", "5:00 PM", "5:30 PM", "6:00 PM", "6:30 PM", "7:00 PM", "7:30 PM", "8:00 PM", "8:30 PM", "9:00 PM", "9:30 PM", "10:00 PM", "10:30 PM", "11:00 PM", "11:30 PM", "12:00 AM"];
+    return times.map((time, idx) => (
+      <div
+        key={`${day}-${time}`}
+        className="time-slot"
+        onClick={() => handleTimeSlotClick(day, time)}
+      >
+        {time}
+      </div>
+    ));
+  };
+
+  // Handle clicking on a time slot
+  const handleTimeSlotClick = (day: number, time: string) => {
+    setSelectedDay(day);
+    setSelectedTime(time);
+    setShowForm(true);
+  };
+
+  // Handle task form submission
+  const handleSubmit = () => {
+    const newTask = {
+      title: taskForm.title,
+      description: taskForm.description,
+      due_date: `${year}-${month}-${selectedDay} ${selectedTime}`,
+      completed: false,
+    };
+
+    axios
+      .post("http://localhost:8080/tasks", newTask)
+      .then(() => {
+        setShowForm(false);
+        setTaskForm({ title: "", description: "" });
+        // Refetch tasks after submission
+        axios
+          .get(`http://localhost:8080/tasks`)
+          .then((response) => setTasks(response.data))
+          .catch((error) => console.error(error));
+      })
+      .catch((error) => console.error(error));
+  };
+
+  return (
+    <div>
+      <h1>
+        Calendar for {month}/{year}
+        <button onClick={() => handleMonthChange(-1)}>&lt;</button>
+        <button onClick={() => handleMonthChange(1)}>&gt;</button>
+      </h1>
+      <div className="calendar-grid">
+        {generateCalendar()}
+      </div>
+
+      {/* Task Popup Form */}
+      {showForm && (
+        <div className="task-form">
+          <h3>Task for {selectedDay}/{month}/{year} at {selectedTime}</h3>
+          <input
+            type="text"
+            placeholder="Task title"
+            value={taskForm.title}
+            onChange={(e) => setTaskForm({ ...taskForm, title: e.target.value })}
+          />
+          <textarea
+            placeholder="Task description"
+            value={taskForm.description}
+            onChange={(e) => setTaskForm({ ...taskForm, description: e.target.value })}
+          />
+          <button onClick={handleSubmit}>Save Task</button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default CalendarGrid;
